@@ -2,12 +2,12 @@ package app
 
 import (
 	"app/internal/config"
+	populate "app/internal/query"
 	"database/sql"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
-	populate "app/internal/query"
+
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
 )
@@ -18,28 +18,34 @@ type App struct {
 }
 
 func (a *App) Initialize() {
-	// Load configuration
-	dbConfig := config.LoadDatabaseConfig()
-
-	// Use the service name 'db' defined in docker-compose.yml
-	connectionString := fmt.Sprintf("host=db user=%s password=%s dbname=%s sslmode=disable",
-		dbConfig.Username, dbConfig.Password, dbConfig.DBName)
 
 	var err error
-	a.DB, err = sql.Open("postgres", connectionString)
 
+	// Lade die Datenbankverbindung, entweder lokal oder Cloud SQL, je nach Umgebungsvariable
+	a.DB, err = config.GetDatabaseConnectionString()
 	if err != nil {
 		log.Fatal(err)
 	} else {
 		log.Default().Printf("Connected to the database")
 	}
 
-	// Pre-populate the database with the tables here 
-	_, err = a.DB.Exec(populate.CreateAndPrepopulateTables())
-
+	// Datenbank initialisieren
+	_, err = a.DB.Exec(populate.WipeDatabase())
 	if err != nil {
-		log.Fatalf("Error creating users table: %v", err)
+		log.Fatalf("Error wiping tables: %v", err)
 	}
+
+	_, err = a.DB.Exec(populate.CreateTables())
+	if err != nil {
+		log.Fatalf("Error creating tables: %v", err)
+	}
+
+	_, err = a.DB.Exec(populate.PopulateDatabase())
+	if err != nil {
+		log.Fatalf("Error populating tables: %v", err)
+	}
+
+	// Router initialisieren
 	a.Router = mux.NewRouter()
 	a.initializeRoutes()
 }
@@ -49,6 +55,6 @@ func (a *App) Run() {
 	if port == "" {
 		port = "8080" // default port if not specified
 	}
-	log.Printf("Server starting on Port %s", port)
+	log.Default().Printf("Server starting on Port %s", port)
 	log.Fatal(http.ListenAndServe(":"+port, a.Router))
 }

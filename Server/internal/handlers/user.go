@@ -2,7 +2,7 @@ package handlers
 
 import (
 	auth "app/internal/auth"
-	. "app/internal/models"
+	"app/internal/models"
 	"app/internal/query"
 	"database/sql"
 	"encoding/json"
@@ -13,14 +13,10 @@ import (
 	"github.com/gorilla/mux"
 )
 
-type Response struct {
-	Message string `json:"message"`
-}
-
 func RegisterUser(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 	log.Default().Printf("📬 [POST] /user at %s", time.Now())
 	// 1. Decode the incoming JSON request
-	var newUser User
+	var newUser models.User
 	err := json.NewDecoder(r.Body).Decode(&newUser)
 	if err != nil {
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
@@ -36,7 +32,7 @@ func RegisterUser(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 	hashedPassword, err := auth.HashPassword(newUser.Password)
 
 	if err != nil {
-		log.Printf("Error hashing password: %v", err)
+		log.Default().Printf("Error hashing password: %v", err)
 		http.Error(w, "Could not create user: ", http.StatusInternalServerError)
 	}
 
@@ -45,8 +41,8 @@ func RegisterUser(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 	// 3. Insert the new user into the database
 	err = db.QueryRow(query.CreateUser(), newUser.Username, newUser.Password, newUser.Email).Scan(&newUser.UserID)
 	if err != nil {
-		log.Printf("Error inserting user: %v", err)
-		http.Error(w, "Could not create user: ", http.StatusInternalServerError)
+		log.Default().Printf("Error inserting user: %v", err)
+		http.Error(w, "Could not create user: ", http.StatusConflict)
 		return
 	}
 
@@ -64,7 +60,7 @@ func LoginUser(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 	log.Default().Printf("📬 [POST] /login at %s", time.Now())
 
 	// 1. Decode the incoming JSON request
-	var loginRequest User
+	var loginRequest models.User
 	err := json.NewDecoder(r.Body).Decode(&loginRequest)
 	if err != nil {
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
@@ -78,10 +74,10 @@ func LoginUser(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 3. Get the user from the database
-	var storedUser User
+	var storedUser models.User
 	err = db.QueryRow(query.GetUserByUsername(), loginRequest.Username).Scan(&storedUser.UserID, &storedUser.Username, &storedUser.Password, &storedUser.Email)
 	if err != nil {
-		log.Printf("Error fetching user: %v", err)
+		log.Default().Printf("Error fetching user: %v", err)
 		http.Error(w, "Invalid username or password", http.StatusUnauthorized)
 		return
 	}
@@ -89,7 +85,7 @@ func LoginUser(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 	// 4. Check if the provided password matches the stored hashed password
 	err = auth.CheckPassword(storedUser.Password, loginRequest.Password)
 	if err != nil {
-		log.Printf("Password mismatch: %v", err)
+		log.Default().Printf("Password mismatch: %v", err)
 		http.Error(w, "Invalid username or password", http.StatusUnauthorized)
 		return
 	}
@@ -98,9 +94,9 @@ func LoginUser(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 	// token := "token"
 	token, err := auth.GenerateJWT(storedUser.UserID)
 	if err != nil {
-			log.Printf("Error generating JWT: %v", err)
-			http.Error(w, "Could not generate token", http.StatusInternalServerError)
-			return
+		log.Default().Printf("Error generating JWT: %v", err)
+		http.Error(w, "Could not generate token", http.StatusInternalServerError)
+		return
 	}
 
 	// 6. Set the response header and return the token
@@ -111,6 +107,7 @@ func LoginUser(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"message": "Successfully logged in",
 		"token":   token,
+		"userID":  storedUser.UserID,
 	})
 }
 
@@ -121,9 +118,9 @@ func LogoutUser(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 
 func DeleteUser(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 	log.Default().Printf("📬 [DELETE] /user at %s", time.Now())
-	
+
 	// TODO: User authentication should be required to delete a user
-	
+
 	// Extract user ID from the URL
 	vars := mux.Vars(r) // Using Gorilla Mux to get URL variables
 	userID := vars["user_id"]
@@ -132,7 +129,7 @@ func DeleteUser(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 
 	// Handle errors
 	if err != nil {
-		log.Printf("Error deleting user: %v", err)
+		log.Default().Printf("Error deleting user: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
@@ -140,7 +137,7 @@ func DeleteUser(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 	// Check the number of rows affected
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
-		log.Printf("Error checking affected rows: %v", err)
+		log.Default().Printf("Error checking affected rows: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
@@ -155,7 +152,6 @@ func DeleteUser(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent) // 204 No Content
 }
 
-
 // ReadUser retrieves user details
 // DEPRECATED: This function is not used in the current implementation
 func ReadUser(db *sql.DB, w http.ResponseWriter, r *http.Request) {
@@ -166,7 +162,7 @@ func ReadUser(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 	userID := vars["user_id"]
 
 	// Prepare a User struct to hold the retrieved user
-	var user User
+	var user models.User
 
 	// Query the database for the user
 	err := db.QueryRow(query.GetUserByID(), userID).Scan(&user.UserID, &user.Username, &user.Password, &user.Email)
@@ -179,7 +175,7 @@ func ReadUser(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// For any other errors, log and respond with a 500
-		log.Printf("Error retrieving user: %v", err)
+		log.Default().Printf("Error retrieving user: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
@@ -199,10 +195,10 @@ func UpdateUser(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 	userID := vars["user_id"]
 
 	// Parse the request body
-	var user User
+	var user models.User
 	err := json.NewDecoder(r.Body).Decode(&user)
 	if err != nil {
-		log.Printf("Error decoding request body: %v", err)
+		log.Default().Printf("Error decoding request body: %v", err)
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return
 	}
@@ -217,7 +213,7 @@ func UpdateUser(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// For any other errors, log and respond with a 500
-		log.Printf("Error updating user: %v", err)
+		log.Default().Printf("Error updating user: %v", err)
 		http.Error(w, "Internal Server Error: ", http.StatusInternalServerError)
 		return
 	}

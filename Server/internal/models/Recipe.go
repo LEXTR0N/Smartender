@@ -1,7 +1,17 @@
 package models
 
 type Recipe struct {
-	RecipeID    string       `json:"recipe_id"`
-	RecipeName  string       `json:"recipe_name"`
-	Ingredients []Ingredient `json:"ingredients"`
+	ID           int     `json:"recipe_id"`
+	HardwareID   int     `json:"hardware_id"`
+	Name         string  `json:"recipe_name"`
+	Picture      int     `json:"picture_id"`
+	DrinkDetails []Drink `json:"drink_details"`
+}
+
+type Recipe_Response struct {
+	ID          int                  `json:"recipe_id"`
+	HardwareID  int                  `json:"hardware_id"`
+	Name        string               `json:"recipe_name"`
+	Picture     int                  `json:"picture_id"`
+	Ingredients []IngredientResponse `json:"ingredientsResponse"`
 }
