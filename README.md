@@ -1,5 +1,7 @@
 # Smartender
 
+> This project was developed as part of the "Internet of Things" course at the Technische Hochschule Würzburg Schweinfurt (THWS).
+
 Smartender (Smart Bartender) is a complete drink mixing system developed for the "Mobile Applications" course. It combines hardware controls with a mobile app interface to create automated cocktail preparation.
 
 ## Project Overview
@@ -83,4 +85,3 @@ The backend server provides the following API endpoints:
 The Flutter app follows a clean architecture pattern with:
 - Authentication handling
 - Local storage for preferences
-- TomTom Map API integration for location features
